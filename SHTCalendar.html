@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SHT Calendar</title>
+  
+  <!-- PWA & アプリアイコン設定 -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="apple-touch-icon" href="icon.png">
+  <meta name="theme-color" content="#0F172A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SHT Calendar">
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* アニメーション用トランジション */
+    .modal-overlay {
+      transition: opacity 0.25s ease-out;
+    }
+    .modal-sheet {
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen w-full flex flex-col items-center justify-start p-0 font-sans antialiased select-none">
+
+  <!-- メインコンテナ（100%表示・上部配置） -->
+  <div class="w-full max-w-[420px] min-h-screen bg-white shadow-sm border-x border-slate-200/80 flex flex-col justify-start relative pb-6">
+    
+    <!-- ヘッダーエリア -->
+    <div class="bg-slate-900 text-white p-3.5 flex flex-col gap-3">
+      
+      <!-- タイトル & 年月切替 -->
+      <div class="flex items-center justify-between">
+        <button id="prevBtn" class="px-2.5 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg text-slate-200 transition-colors">
+          ‹ 前月
+        </button>
+        
+        <div class="text-center flex items-center justify-center gap-1.5">
+          <img src="icon.png" alt="SHT Icon" class="w-5 h-5 rounded-md shadow-sm">
+          <div>
+            <span class="text-[10px] uppercase tracking-widest text-teal-400 font-extrabold block leading-none mb-0.5">SHT Calendar</span>
+            <h2 id="currentMonthYear" class="text-lg font-bold tracking-tight text-white leading-none">2026年 07月</h2>
+          </div>
+        </div>
+
+        <button id="nextBtn" class="px-2.5 py-1.5 text-xs font-bold bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 rounded-lg text-slate-200 transition-colors">
+          来月 ›
+        </button>
+      </div>
+      
+      <!-- 時間集計ダッシュボード (3列均等表示) -->
+      <div class="grid grid-cols-3 gap-1.5">
+        <!-- 1. 最低労働時間 -->
+        <div class="bg-slate-800/90 border border-slate-700/80 p-2 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[9px] font-bold text-slate-400 block leading-tight mb-0.5">最低労働時間</span>
+          <div class="flex items-baseline gap-0.5">
+            <span id="targetHours" class="text-lg font-extrabold text-sky-400 leading-none">0</span>
+            <span class="text-[10px] text-slate-400 font-medium">h</span>
+          </div>
+        </div>
+
+        <!-- 2. 労働時間 -->
+        <div class="bg-slate-800/90 border border-slate-700/80 p-2 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[9px] font-bold text-slate-400 block leading-tight mb-0.5">労働時間</span>
+          <div class="flex items-baseline gap-0.5">
+            <span id="totalHours" class="text-lg font-extrabold text-teal-400 leading-none">0</span>
+            <span class="text-[10px] text-slate-400 font-medium">h</span>
+          </div>
+        </div>
+
+        <!-- 3. 差分 -->
+        <div class="bg-slate-800/90 border border-slate-700/80 p-2 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[9px] font-bold text-slate-400 block leading-tight mb-0.5">差分</span>
+          <div class="flex items-baseline gap-0.5">
+            <span id="diffHours" class="text-lg font-extrabold text-slate-300 leading-none">±0</span>
+            <span class="text-[10px] text-slate-400 font-medium">h</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- カレンダーエリア -->
+    <div class="p-2 flex-1">
+      <!-- 曜日ヘッダー -->
+      <div class="grid grid-cols-7 gap-1 mb-1 text-center text-[11px] font-bold text-slate-500">
+        <div class="text-red-500 py-0.5">日</div>
+        <div class="py-0.5">月</div>
+        <div class="py-0.5">火</div>
+        <div class="py-0.5">水</div>
+        <div class="py-0.5">木</div>
+        <div class="py-0.5">金</div>
+        <div class="text-blue-500 py-0.5">土</div>
+      </div>
+
+      <!-- 日付グリッド (最大7×5カラム=35マス制限) -->
+      <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
+    </div>
+
+  </div>
+
+  <!-- iOS風ボトムシートピッカーモーダル -->
+  <div id="pickerModal" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs opacity-0 pointer-events-none">
+    <!-- モーダルシート本体 -->
+    <div id="pickerSheet" class="modal-sheet w-full max-w-[420px] mx-auto bg-white rounded-t-2xl p-4 shadow-2xl transform translate-y-full">
+      <!-- つまみグラブバー -->
+      <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3"></div>
+      
+      <!-- ヘッダー -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
+        <span id="modalDateTitle" class="text-sm font-extrabold text-slate-800">月 日</span>
+        <button id="closeModalBtn" class="text-xs font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg active:bg-teal-100 transition-colors">
+          完了
+        </button>
+      </div>
+      
+      <!-- 選択項目リスト (iOS ActionSheet 風) -->
+      <div id="modalOptionList" class="max-h-[320px] overflow-y-auto flex flex-col gap-1 py-1 pr-1">
+        <!-- JSで動的にボタン項目を出力 -->
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentDate = new Date();
+    const workData = {};
+    let activeDateString = null;
+    const holidayCache = {};
+    let onlineHolidays = {};
+    const STORAGE_KEY = 'sht_calendar_work_data_v1';
+
+    const currentMonthYearEl = document.getElementById('currentMonthYear');
+    const calendarGridEl = document.getElementById('calendarGrid');
+    const targetHoursEl = document.getElementById('targetHours');
+    const totalHoursEl = document.getElementById('totalHours');
+    const diffHoursEl = document.getElementById('diffHours');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+
+    const pickerModal = document.getElementById('pickerModal');
+    const pickerSheet = document.getElementById('pickerSheet');
+    const modalDateTitle = document.getElementById('modalDateTitle');
+    const modalOptionList = document.getElementById('modalOptionList');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+
+    // ── データの保存 & 復元機能 ──
+    function loadWorkData() {
+      try {
+        const savedStr = localStorage.getItem(STORAGE_KEY);
+        if (savedStr) {
+          const parsed = JSON.parse(savedStr);
+          Object.assign(workData, parsed);
+        }
+      } catch (e) {
+        console.error('Failed to load saved data:', e);
+      }
+    }
+
+    function saveWorkData() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
+      } catch (e) {
+        console.error('Failed to save data:', e);
+      }
+    }
+
+    // ── ネットから最新の祝日データを自動非同期同期 ──
+    async function syncLatestHolidays() {
+      try {
+        const res = await fetch('https://holidays-jp.github.io/api/v1/date.json');
+        if (res.ok) {
+          const data = await res.json();
+          onlineHolidays = data;
+          renderCalendar();
+        }
+      } catch (e) {
+        // オフラインフォールバック
+      }
+    }
+
+    // ── 2028年以降・未来の全年に対応する自動祝日計算プログラム ──
+    function getHolidaysOfYear(year) {
+      if (holidayCache[year]) return holidayCache[year];
+
+      const h = {};
+      const pad = (n) => String(n).padStart(2, '0');
+      const makeStr = (m, d) => `${year}-${pad(m)}-${pad(d)}`;
+
+      // 1. 固定祝日
+      h[makeStr(1, 1)] = "元日";
+      h[makeStr(2, 11)] = "建国記念の日";
+      h[makeStr(2, 23)] = "天皇誕生日";
+      h[makeStr(4, 29)] = "昭和の日";
+      h[makeStr(5, 3)] = "憲法記念日";
+      h[makeStr(5, 4)] = "みどりの日";
+      h[makeStr(5, 5)] = "こどもの日";
+      h[makeStr(8, 11)] = "山の日";
+      h[makeStr(11, 3)] = "文化の日";
+      h[makeStr(11, 23)] = "勤労感謝の日";
+
+      // 2. ハッピーマンデー
+      function getNthMonday(m, n) {
+        let count = 0;
+        for (let d = 1; d <= 31; d++) {
+          const dt = new Date(year, m - 1, d);
+          if (dt.getMonth() !== m - 1) break;
+          if (dt.getDay() === 1) {
+            count++;
+            if (count === n) return d;
+          }
+        }
+        return 1;
+      }
+
+      h[makeStr(1, getNthMonday(1, 2))] = "成人の日";
+      h[makeStr(7, getNthMonday(7, 3))] = "海の日";
+      h[makeStr(9, getNthMonday(9, 3))] = "敬老の日";
+      h[makeStr(10, getNthMonday(10, 2))] = "スポーツの日";
+
+      // 3. 春分の日・秋分の日
+      const syunbunDay = Math.floor(20.8431 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+      const syubunDay = Math.floor(23.2488 + 0.242194 * (year - 1980) - Math.floor((year - 1980) / 4));
+      h[makeStr(3, syunbunDay)] = "春分の日";
+      h[makeStr(9, syubunDay)] = "秋分の日";
+
+      // 4. 国民の休日
+      const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+      const daysInMonth = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+      for (let m = 1; m <= 12; m++) {
+        for (let d = 2; d < daysInMonth[m - 1]; d++) {
+          const currStr = makeStr(m, d);
+          const prevStr = makeStr(m, d - 1);
+          const nextStr = makeStr(m, d + 1);
+          
+          const dt = new Date(year, m - 1, d);
+          if (dt.getDay() !== 0 && dt.getDay() !== 6) {
+            if (h[prevStr] && h[nextStr] && !h[currStr]) {
+              h[currStr] = "国民の休日";
+            }
+          }
+        }
+      }
+
+      // 5. 振替休日
+      const sortedDates = Object.keys(h).sort();
+      sortedDates.forEach(dateStr => {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const dt = new Date(y, m - 1, d);
+        if (dt.getDay() === 0) {
+          let subD = new Date(y, m - 1, d + 1);
+          let subStr = `${subD.getFullYear()}-${pad(subD.getMonth() + 1)}-${pad(subD.getDate())}`;
+          while (h[subStr]) {
+            subD.setDate(subD.getDate() + 1);
+            subStr = `${subD.getFullYear()}-${pad(subD.getMonth() + 1)}-${pad(subD.getDate())}`;
+          }
+          h[subStr] = "振替休日";
+        }
+      });
+
+      holidayCache[year] = h;
+      return h;
+    }
+
+    function getHolidayName(dateString) {
+      if (onlineHolidays[dateString]) {
+        return onlineHolidays[dateString];
+      }
+      const year = parseInt(dateString.split('-')[0]);
+      const yearHolidays = getHolidaysOfYear(year);
+      return yearHolidays[dateString];
+    }
+
+    function isHoliday(dateString) {
+      return getHolidayName(dateString) !== undefined;
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+
+      currentMonthYearEl.textContent = `${year}年 ${String(month + 1).padStart(2, '0')}月`;
+      calendarGridEl.innerHTML = '';
+
+      const firstDayIndex = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+      const prevLastDate = new Date(year, month, 0).getDate();
+
+      const MAX_CELLS = 35;
+      let cellCount = 0;
+
+      for (let i = firstDayIndex; i > 0; i--) {
+        if (cellCount >= MAX_CELLS) break;
+        const dateVal = prevLastDate - i + 1;
+        const prevMonth = month === 0 ? 11 : month - 1;
+        const prevYear = month === 0 ? year - 1 : year;
+        createDayCell(prevYear, prevMonth, dateVal, true);
+        cellCount++;
+      }
+
+      for (let dateVal = 1; dateVal <= lastDate; dateVal++) {
+        if (cellCount >= MAX_CELLS) break;
+        createDayCell(year, month, dateVal, false);
+        cellCount++;
+      }
+
+      for (let dateVal = 1; cellCount < MAX_CELLS; dateVal++) {
+        const nextMonth = month === 11 ? 0 : month + 1;
+        const nextYear = month === 11 ? year + 1 : year;
+        createDayCell(nextYear, nextMonth, dateVal, true);
+        cellCount++;
+      }
+
+      calculateTotal();
+    }
+
+    function createDayCell(year, month, dateVal, isAdjacentMonth) {
+      const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(dateVal).padStart(2, '0')}`;
+      const dayOfWeek = new Date(year, month, dateVal).getDay();
+      
+      const isSun = dayOfWeek === 0;
+      const isSat = dayOfWeek === 6;
+      const holidayName = isAdjacentMonth ? undefined : getHolidayName(dateString);
+      const isHol = holidayName !== undefined;
+      const isLegalHoliday = isSun || isSat || isHol;
+
+      if (!workData[dateString]) {
+        const isActualHoliday = isSun || isSat || isHoliday(dateString);
+        const isDefaultSelected = !isActualHoliday;
+        workData[dateString] = { value: "", hours: null, isSelected: isDefaultSelected };
+      }
+      const dayData = workData[dateString];
+
+      const cell = document.createElement('div');
+      
+      let cellClass = 'min-h-[68px] border rounded-lg p-1 flex flex-col justify-between transition-all duration-150 ';
+      
+      if (isAdjacentMonth) {
+        cellClass += 'bg-slate-50/60 border-slate-100 text-slate-300';
+      } else if (isLegalHoliday) {
+        cellClass += 'bg-red-50/25 border-red-100 text-red-400';
+      } else if (dayData.value === 'PAID') {
+        cellClass += 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm';
+      } else if (dayData.value === 'SFT') {
+        cellClass += 'bg-purple-50 border-purple-300 text-purple-900 shadow-sm';
+      } else if (dayData.isSelected) {
+        cellClass += 'bg-sky-50/70 border-sky-300 text-sky-900 cursor-pointer';
+      } else {
+        cellClass += 'bg-white border-slate-200 text-slate-700 hover:border-slate-300 cursor-pointer';
+      }
+      cell.className = cellClass;
+
+      if (!isAdjacentMonth && !isLegalHoliday) {
+        cell.addEventListener('click', (e) => {
+          if (!e.target.closest('.picker-btn')) {
+            dayData.isSelected = !dayData.isSelected;
+            saveWorkData();
+            renderCalendar();
+          }
+        });
+      }
+
+      // 日付ヘッダー
+      const dayHeader = document.createElement('div');
+      dayHeader.className = 'flex items-baseline justify-between w-full leading-none px-0.5 pt-0.5';
+      
+      const dayNum = document.createElement('span');
+      dayNum.className = `text-xs font-extrabold ${
+        isAdjacentMonth 
+          ? 'text-slate-300' 
+          : (isLegalHoliday ? (isSat ? 'text-blue-500' : 'text-red-500') : 'text-slate-800')
+      }`;
+      dayNum.textContent = dateVal;
+      dayHeader.appendChild(dayNum);
+
+      if (isHol) {
+        const holidayLabel = document.createElement('span');
+        holidayLabel.className = 'text-[8px] text-red-400 font-bold truncate max-w-[32px]';
+        holidayLabel.textContent = holidayName;
+        dayHeader.appendChild(holidayLabel);
+      }
+      cell.appendChild(dayHeader);
+
+      // カスタム表示ボタン（ボトムシート起動用）
+      if (!isAdjacentMonth && !isLegalHoliday) {
+        const pickerBtn = document.createElement('button');
+        pickerBtn.className = 'picker-btn w-full text-[10px] font-extrabold border rounded py-1 transition-all flex items-center justify-center gap-0.5 ';
+        
+        let labelText = "-";
+        if (dayData.value === 'PAID') {
+          labelText = "有給";
+          pickerBtn.className += 'bg-emerald-100 border-emerald-400 text-emerald-900';
+        } else if (dayData.value === 'SFT') {
+          labelText = "SFT";
+          pickerBtn.className += 'bg-purple-100 border-purple-400 text-purple-900';
+        } else if (dayData.value !== "") {
+          labelText = `${dayData.value}h`;
+          pickerBtn.className += 'bg-sky-100 border-sky-400 text-sky-900';
+        } else if (dayData.isSelected) {
+          pickerBtn.className += 'bg-sky-50/80 border-sky-200 text-slate-600 hover:border-sky-300';
+        } else {
+          pickerBtn.className += 'bg-slate-50 border-slate-200 text-slate-400 hover:border-slate-300';
+        }
+
+        pickerBtn.textContent = labelText;
+
+        pickerBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openPickerModal(year, month, dateVal, dateString);
+        });
+
+        cell.appendChild(pickerBtn);
+      } else {
+        const spacer = document.createElement('div');
+        spacer.className = 'h-5';
+        cell.appendChild(spacer);
+      }
+
+      calendarGridEl.appendChild(cell);
+    }
+
+    // iOS風ボトムシートピッカーモーダルの開閉処理
+    function openPickerModal(year, month, dateVal, dateString) {
+      activeDateString = dateString;
+      const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
+      const dayOfWeek = weekDays[new Date(year, month, dateVal).getDay()];
+      
+      modalDateTitle.textContent = `${month + 1}月${dateVal}日 (${dayOfWeek}) の勤務時間`;
+      modalOptionList.innerHTML = '';
+
+      const currentVal = workData[dateString]?.value || "";
+
+      const options = [
+        { val: "", label: "-" },
+        { val: "PAID", label: "有給" },
+        { val: "SFT", label: "SFT" },
+      ];
+
+      for (let h = 2.0; h <= 12.0; h += 0.5) {
+        options.push({ val: h.toFixed(1), label: `${h.toFixed(1)}h` });
+      }
+
+      options.forEach(opt => {
+        const itemBtn = document.createElement('button');
+        const isSelected = currentVal === opt.val;
+        
+        itemBtn.className = `w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between transition-all ${
+          isSelected 
+            ? 'bg-teal-50 text-teal-700 border-2 border-teal-500 shadow-sm' 
+            : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 active:bg-slate-200'
+        }`;
+
+        itemBtn.innerHTML = `
+          <span>${opt.label}</span>
+          ${isSelected ? `<svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>` : ''}
+        `;
+
+        itemBtn.addEventListener('click', () => {
+          updateDayValue(dateString, opt.val);
+          closePickerModal();
+        });
+
+        modalOptionList.appendChild(itemBtn);
+      });
+
+      pickerModal.classList.remove('opacity-0', 'pointer-events-none');
+      pickerSheet.classList.remove('translate-y-full');
+    }
+
+    function closePickerModal() {
+      pickerSheet.classList.add('translate-y-full');
+      pickerModal.classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    function updateDayValue(dateString, val) {
+      if (!workData[dateString]) return;
+      const dayData = workData[dateString];
+      dayData.value = val;
+
+      if (val === "") {
+        dayData.hours = null;
+      } else if (val === "PAID") {
+        dayData.hours = 8.0;
+      } else if (val === "SFT") {
+        dayData.hours = 0.0;
+      } else {
+        dayData.hours = parseFloat(val);
+      }
+
+      saveWorkData();
+      renderCalendar();
+    }
+
+    pickerModal.addEventListener('click', (e) => {
+      if (e.target === pickerModal) {
+        closePickerModal();
+      }
+    });
+
+    closeModalBtn.addEventListener('click', closePickerModal);
+
+    function calculateTotal() {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      
+      let totalPlanned = 0;
+      let selectedDaysCount = 0;
+
+      for (const [key, value] of Object.entries(workData)) {
+        const [kYear, kMonth] = key.split('-').map(Number);
+        if (kYear === year && kMonth === (month + 1)) {
+          if (value.hours !== null) {
+            totalPlanned += value.hours;
+          }
+          if (value.isSelected) {
+            selectedDaysCount++;
+          }
+        }
+      }
+
+      const targetTotal = selectedDaysCount * 8;
+      const diff = totalPlanned - targetTotal;
+      let diffText = "";
+      
+      if (diff > 0) {
+        diffText = `+${diff}`;
+        diffHoursEl.className = "text-lg font-extrabold leading-none text-emerald-400";
+      } else if (diff < 0) {
+        diffText = `${diff}`;
+        diffHoursEl.className = "text-lg font-extrabold leading-none text-red-400";
+      } else {
+        diffText = "±0";
+        diffHoursEl.className = "text-lg font-extrabold leading-none text-slate-300";
+      }
+
+      targetHoursEl.textContent = targetTotal;
+      totalHoursEl.textContent = totalPlanned;
+      diffHoursEl.textContent = diffText;
+    }
+
+    prevBtn.addEventListener('click', () => {
+      currentDate.setMonth(currentDate.getMonth() - 1);
+      renderCalendar();
+    });
+
+    nextBtn.addEventListener('click', () => {
+      currentDate.setMonth(currentDate.getMonth() + 1);
+      renderCalendar();
+    });
+
+    // PWA Service Worker の登録
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW reg info:', err));
+      });
+    }
+
+    // 初期表示レンダリング
+    loadWorkData();
+    renderCalendar();
+    syncLatestHolidays();
+  </script>
+</body>
+</html>
