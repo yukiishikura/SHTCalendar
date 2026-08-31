@@ -28,7 +28,7 @@
 <body class="bg-slate-100 text-slate-800 min-h-screen w-full flex flex-col items-center justify-start p-0 font-sans antialiased select-none">
 
   <!-- メインコンテナ（100%表示・上部配置） -->
-  <div class="w-full max-w-[420px] min-h-screen bg-white shadow-sm border-x border-slate-200/80 flex flex-col justify-start relative pb-6">
+  <div class="w-full max-w-[420px] min-h-screen bg-white shadow-sm border-x border-slate-200/80 flex flex-col justify-start relative pb-10">
     
     <!-- ヘッダーエリア -->
     <div class="bg-slate-900 text-white p-3.5 flex flex-col gap-3">
@@ -86,20 +86,59 @@
     </div>
 
     <!-- カレンダーエリア -->
-    <div class="p-2 flex-1">
-      <!-- 曜日ヘッダー -->
-      <div class="grid grid-cols-7 gap-1 mb-1 text-center text-[11px] font-bold text-slate-500">
-        <div class="text-red-500 py-0.5">日</div>
-        <div class="py-0.5">月</div>
-        <div class="py-0.5">火</div>
-        <div class="py-0.5">水</div>
-        <div class="py-0.5">木</div>
-        <div class="py-0.5">金</div>
-        <div class="text-blue-500 py-0.5">土</div>
+    <div class="p-2 flex-1 flex flex-col gap-3">
+      <!-- 曜日ヘッダー ＆ カレンダーグリッド -->
+      <div>
+        <div class="grid grid-cols-7 gap-1 mb-1 text-center text-[11px] font-bold text-slate-500">
+          <div class="text-red-500 py-0.5">日</div>
+          <div class="py-0.5">月</div>
+          <div class="py-0.5">火</div>
+          <div class="py-0.5">水</div>
+          <div class="py-0.5">木</div>
+          <div class="py-0.5">金</div>
+          <div class="text-blue-500 py-0.5">土</div>
+        </div>
+
+        <!-- 日付グリッド (最大7×5カラム=35マス制限) -->
+        <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
       </div>
 
-      <!-- 日付グリッド (最大7×5カラム=35マス制限) -->
-      <div id="calendarGrid" class="grid grid-cols-7 gap-1"></div>
+      <!-- 左側固定タイトル ＆ 右側状態ボタン（デフォルト：固定（ロック）） -->
+      <div class="flex items-center justify-between bg-slate-100/80 border border-slate-200/80 px-3.5 py-2.5 rounded-xl">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">🔒</span>
+          <span class="text-xs font-extrabold text-slate-700">勤務対象日の変更モード</span>
+        </div>
+        
+        <button id="toggleLockBtn" class="text-xs font-extrabold px-3.5 py-1.5 rounded-lg border transition-all shadow-xs bg-amber-500 text-white border-amber-600 hover:bg-amber-600 active:bg-amber-700">
+          固定（ロック）
+        </button>
+      </div>
+
+      <!-- カレンダー下の「日別 備考メモ」カードエリア -->
+      <div id="memoCard" class="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 shadow-xs flex flex-col gap-2 transition-all">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-1.5">
+            <span class="text-sm">📝</span>
+            <span id="memoSelectedDateTitle" class="text-xs font-extrabold text-slate-700">選択日の備考メモ</span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-bold">自動保存</span>
+        </div>
+        <textarea 
+          id="dayMemoInput" 
+          rows="2" 
+          placeholder="タップしてこの日の備考・メモを入力（例: 直行直帰、在宅勤務、半休など）"
+          class="w-full text-xs text-slate-800 bg-white border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all placeholder:text-slate-400 resize-none"
+        ></textarea>
+      </div>
+    </div>
+
+    <!-- 右下の「最新アップデート」テキストリンク -->
+    <div class="w-full px-3 py-1.5 flex justify-end items-center">
+      <button id="forceUpdateBtn" class="text-[11px] font-bold text-slate-400 hover:text-teal-600 underline underline-offset-2 transition-colors flex items-center gap-1 cursor-pointer active:opacity-70">
+        <span>🔄</span>
+        <span>最新アップデート</span>
+      </button>
     </div>
 
   </div>
@@ -107,21 +146,37 @@
   <!-- iOS風ボトムシートピッカーモーダル -->
   <div id="pickerModal" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs opacity-0 pointer-events-none">
     <!-- モーダルシート本体 -->
-    <div id="pickerSheet" class="modal-sheet w-full max-w-[420px] mx-auto bg-white rounded-t-2xl p-4 shadow-2xl transform translate-y-full">
+    <div id="pickerSheet" class="modal-sheet w-full max-w-[420px] mx-auto bg-white rounded-t-2xl p-4 shadow-2xl transform translate-y-full flex flex-col gap-3">
       <!-- つまみグラブバー -->
-      <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-3"></div>
+      <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto"></div>
       
       <!-- ヘッダー -->
-      <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-2">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <span id="modalDateTitle" class="text-sm font-extrabold text-slate-800">月 日</span>
         <button id="closeModalBtn" class="text-xs font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg active:bg-teal-100 transition-colors">
           完了
         </button>
       </div>
       
+      <!-- 備考メモ入力（モーダル内） -->
+      <div class="flex flex-col gap-1">
+        <label class="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+          <span>📝</span> 備考メモ
+        </label>
+        <input 
+          type="text" 
+          id="modalMemoInput" 
+          placeholder="備考を入力（例: 在宅、遅刻理由など）"
+          class="w-full text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500 transition-all placeholder:text-slate-400"
+        >
+      </div>
+
       <!-- 選択項目リスト (iOS ActionSheet 風) -->
-      <div id="modalOptionList" class="max-h-[320px] overflow-y-auto flex flex-col gap-1 py-1 pr-1">
-        <!-- JSで動的にボタン項目を出力 -->
+      <div class="flex flex-col gap-1">
+        <span class="text-[11px] font-bold text-slate-500">勤務時間 / 区分</span>
+        <div id="modalOptionList" class="max-h-[220px] overflow-y-auto flex flex-col gap-1 py-1 pr-1">
+          <!-- JSで動的にボタン項目を出力 -->
+        </div>
       </div>
     </div>
   </div>
@@ -130,9 +185,12 @@
     let currentDate = new Date();
     const workData = {};
     let activeDateString = null;
+    let selectedCellDateString = null; // 現在選択表示（フォーカス）中の日付
+    let isDateSelectionLocked = true;   // デフォルトで勤務対象日を固定（ロック）
     const holidayCache = {};
     let onlineHolidays = {};
     const STORAGE_KEY = 'sht_calendar_work_data_v1';
+    const FOCUS_STORAGE_KEY = 'sht_calendar_focused_date_v1';
 
     const currentMonthYearEl = document.getElementById('currentMonthYear');
     const calendarGridEl = document.getElementById('calendarGrid');
@@ -142,19 +200,76 @@
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
 
+    const toggleLockBtn = document.getElementById('toggleLockBtn');
+
     const pickerModal = document.getElementById('pickerModal');
     const pickerSheet = document.getElementById('pickerSheet');
     const modalDateTitle = document.getElementById('modalDateTitle');
     const modalOptionList = document.getElementById('modalOptionList');
+    const modalMemoInput = document.getElementById('modalMemoInput');
     const closeModalBtn = document.getElementById('closeModalBtn');
 
-    // ── データの保存 & 復元機能 ──
+    const memoSelectedDateTitle = document.getElementById('memoSelectedDateTitle');
+    const dayMemoInput = document.getElementById('dayMemoInput');
+    const forceUpdateBtn = document.getElementById('forceUpdateBtn');
+
+    // ── 最新アップデート（フォーカス状態を100%維持して最新コードに更新） ──
+    forceUpdateBtn.addEventListener('click', async () => {
+      forceUpdateBtn.innerHTML = "<span>🔄</span> <span>更新中...</span>";
+      
+      if (selectedCellDateString) {
+        localStorage.setItem(FOCUS_STORAGE_KEY, selectedCellDateString);
+      }
+
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(key => caches.delete(key)));
+        }
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          for (let reg of registrations) {
+            await reg.unregister();
+          }
+        }
+      } catch (e) {
+        console.error('Update error:', e);
+      }
+      window.location.reload(true);
+    });
+
+    // ── ロック状態のUIトグル更新（ボタンテキストで判別） ──
+    function updateLockUI() {
+      if (isDateSelectionLocked) {
+        // 固定（ロック）状態：オレンジ色の「固定（ロック）」ボタン
+        toggleLockBtn.textContent = "固定（ロック）";
+        toggleLockBtn.className = "text-xs font-extrabold px-3.5 py-1.5 rounded-lg border transition-all shadow-xs bg-amber-500 text-white border-amber-600 hover:bg-amber-600 active:bg-amber-700";
+      } else {
+        // 変更モード状態：白色の「変更モード」ボタン
+        toggleLockBtn.textContent = "変更モード";
+        toggleLockBtn.className = "text-xs font-extrabold px-3.5 py-1.5 rounded-lg border transition-all shadow-xs bg-white text-slate-700 border-slate-300 hover:bg-slate-50 active:bg-slate-100";
+      }
+    }
+
+    toggleLockBtn.addEventListener('click', () => {
+      isDateSelectionLocked = !isDateSelectionLocked;
+      updateLockUI();
+    });
+
+    // ── データの保存 & 復元（フォーカス記憶対応） ──
     function loadWorkData() {
       try {
         const savedStr = localStorage.getItem(STORAGE_KEY);
         if (savedStr) {
           const parsed = JSON.parse(savedStr);
           Object.assign(workData, parsed);
+        }
+
+        const savedFocusedDate = localStorage.getItem(FOCUS_STORAGE_KEY);
+        if (savedFocusedDate) {
+          selectedCellDateString = savedFocusedDate;
+          const [fYear, fMonth] = savedFocusedDate.split('-').map(Number);
+          currentDate = new Date(fYear, fMonth - 1, 1);
         }
       } catch (e) {
         console.error('Failed to load saved data:', e);
@@ -316,6 +431,13 @@
         cellCount++;
       }
 
+      if (!selectedCellDateString) {
+        const defaultStr = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        selectDateForMemo(defaultStr);
+      } else {
+        updateBottomMemoCard(selectedCellDateString);
+      }
+
       calculateTotal();
     }
 
@@ -332,16 +454,18 @@
       if (!workData[dateString]) {
         const isActualHoliday = isSun || isSat || isHoliday(dateString);
         const isDefaultSelected = !isActualHoliday;
-        workData[dateString] = { value: "", hours: null, isSelected: isDefaultSelected };
+        workData[dateString] = { value: "", hours: null, isSelected: isDefaultSelected, memo: "" };
       }
       const dayData = workData[dateString];
 
       const cell = document.createElement('div');
       
-      let cellClass = 'min-h-[68px] border rounded-lg p-1 flex flex-col justify-between transition-all duration-150 ';
+      let cellClass = 'min-h-[68px] border rounded-lg p-1 flex flex-col justify-between transition-all duration-150 relative ';
       
       if (isAdjacentMonth) {
         cellClass += 'bg-slate-50/60 border-slate-100 text-slate-300';
+      } else if (selectedCellDateString === dateString) {
+        cellClass += 'bg-sky-100/90 border-2 border-teal-500 text-slate-900 shadow-md ring-2 ring-teal-500/20';
       } else if (isLegalHoliday) {
         cellClass += 'bg-red-50/25 border-red-100 text-red-400';
       } else if (dayData.value === 'PAID') {
@@ -355,20 +479,24 @@
       }
       cell.className = cellClass;
 
-      if (!isAdjacentMonth && !isLegalHoliday) {
-        cell.addEventListener('click', (e) => {
-          if (!e.target.closest('.picker-btn')) {
+      cell.addEventListener('click', (e) => {
+        selectDateForMemo(dateString);
+        if (!isAdjacentMonth && !isLegalHoliday && !e.target.closest('.picker-btn')) {
+          if (!isDateSelectionLocked) {
             dayData.isSelected = !dayData.isSelected;
             saveWorkData();
-            renderCalendar();
           }
-        });
-      }
+          renderCalendar();
+        }
+      });
 
       // 日付ヘッダー
       const dayHeader = document.createElement('div');
       dayHeader.className = 'flex items-baseline justify-between w-full leading-none px-0.5 pt-0.5';
       
+      const dayNumContainer = document.createElement('div');
+      dayNumContainer.className = 'flex items-center gap-0.5';
+
       const dayNum = document.createElement('span');
       dayNum.className = `text-xs font-extrabold ${
         isAdjacentMonth 
@@ -376,7 +504,17 @@
           : (isLegalHoliday ? (isSat ? 'text-blue-500' : 'text-red-500') : 'text-slate-800')
       }`;
       dayNum.textContent = dateVal;
-      dayHeader.appendChild(dayNum);
+      dayNumContainer.appendChild(dayNum);
+
+      if (dayData.memo && dayData.memo.trim() !== "") {
+        const memoBadge = document.createElement('span');
+        memoBadge.className = 'text-[9px] leading-none';
+        memoBadge.textContent = '📝';
+        memoBadge.title = dayData.memo;
+        dayNumContainer.appendChild(memoBadge);
+      }
+
+      dayHeader.appendChild(dayNumContainer);
 
       if (isHol) {
         const holidayLabel = document.createElement('span');
@@ -411,6 +549,7 @@
 
         pickerBtn.addEventListener('click', (e) => {
           e.stopPropagation();
+          selectDateForMemo(dateString);
           openPickerModal(year, month, dateVal, dateString);
         });
 
@@ -424,14 +563,57 @@
       calendarGridEl.appendChild(cell);
     }
 
+    // ── カレンダー下部の備考メモカードの更新 & フォーカス位置保存 ──
+    function selectDateForMemo(dateString) {
+      selectedCellDateString = dateString;
+      try {
+        localStorage.setItem(FOCUS_STORAGE_KEY, dateString);
+      } catch (e) {}
+      updateBottomMemoCard(dateString);
+      renderCalendarHighlightOnly();
+    }
+
+    function renderCalendarHighlightOnly() {
+      renderCalendar();
+    }
+
+    function updateBottomMemoCard(dateString) {
+      if (!dateString) return;
+      const [y, m, d] = dateString.split('-').map(Number);
+      const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
+      const dayOfWeek = weekDays[new Date(y, m - 1, d).getDay()];
+      
+      memoSelectedDateTitle.textContent = `${m}月${d}日 (${dayOfWeek}) の備考メモ`;
+      
+      if (!workData[dateString]) {
+        workData[dateString] = { value: "", hours: null, isSelected: true, memo: "" };
+      }
+      dayMemoInput.value = workData[dateString].memo || "";
+    }
+
+    dayMemoInput.addEventListener('input', (e) => {
+      if (!selectedCellDateString) return;
+      if (!workData[selectedCellDateString]) {
+        workData[selectedCellDateString] = { value: "", hours: null, isSelected: true, memo: "" };
+      }
+      workData[selectedCellDateString].memo = e.target.value;
+      saveWorkData();
+    });
+
     // iOS風ボトムシートピッカーモーダルの開閉処理
     function openPickerModal(year, month, dateVal, dateString) {
       activeDateString = dateString;
       const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
       const dayOfWeek = weekDays[new Date(year, month, dateVal).getDay()];
       
-      modalDateTitle.textContent = `${month + 1}月${dateVal}日 (${dayOfWeek}) の勤務時間`;
+      modalDateTitle.textContent = `${month + 1}月${dateVal}日 (${dayOfWeek}) の設定`;
       modalOptionList.innerHTML = '';
+
+      if (!workData[dateString]) {
+        workData[dateString] = { value: "", hours: null, isSelected: true, memo: "" };
+      }
+
+      modalMemoInput.value = workData[dateString].memo || "";
 
       const currentVal = workData[dateString]?.value || "";
 
@@ -449,7 +631,7 @@
         const itemBtn = document.createElement('button');
         const isSelected = currentVal === opt.val;
         
-        itemBtn.className = `w-full px-4 py-3 rounded-xl text-sm font-bold flex items-center justify-between transition-all ${
+        itemBtn.className = `w-full px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all ${
           isSelected 
             ? 'bg-teal-50 text-teal-700 border-2 border-teal-500 shadow-sm' 
             : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 active:bg-slate-200'
@@ -457,7 +639,7 @@
 
         itemBtn.innerHTML = `
           <span>${opt.label}</span>
-          ${isSelected ? `<svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>` : ''}
+          ${isSelected ? `<svg class="w-4 h-4 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>` : ''}
         `;
 
         itemBtn.addEventListener('click', () => {
@@ -472,9 +654,20 @@
       pickerSheet.classList.remove('translate-y-full');
     }
 
+    modalMemoInput.addEventListener('input', (e) => {
+      if (!activeDateString) return;
+      if (!workData[activeDateString]) {
+        workData[activeDateString] = { value: "", hours: null, isSelected: true, memo: "" };
+      }
+      workData[activeDateString].memo = e.target.value;
+      dayMemoInput.value = e.target.value;
+      saveWorkData();
+    });
+
     function closePickerModal() {
       pickerSheet.classList.add('translate-y-full');
       pickerModal.classList.add('opacity-0', 'pointer-events-none');
+      renderCalendar();
     }
 
     function updateDayValue(dateString, val) {
@@ -545,15 +738,17 @@
 
     prevBtn.addEventListener('click', () => {
       currentDate.setMonth(currentDate.getMonth() - 1);
+      selectedCellDateString = null;
       renderCalendar();
     });
 
     nextBtn.addEventListener('click', () => {
       currentDate.setMonth(currentDate.getMonth() + 1);
+      selectedCellDateString = null;
       renderCalendar();
     });
 
-    // PWA Service Worker の登録 ＆ 更新時の自動リロード設定
+    // PWA Service Worker の自動登録 ＆ ソース更新時のシームレス自動反映
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js').then((reg) => {
@@ -561,6 +756,9 @@
             const newWorker = reg.installing;
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                if (selectedCellDateString) {
+                  localStorage.setItem(FOCUS_STORAGE_KEY, selectedCellDateString);
+                }
                 window.location.reload();
               }
             });
@@ -571,6 +769,7 @@
 
     // 初期表示レンダリング
     loadWorkData();
+    updateLockUI();
     renderCalendar();
     syncLatestHolidays();
   </script>
