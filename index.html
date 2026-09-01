@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>SHT Calendar</title>
+  <title>SFT Calendar</title>
   
   <!-- PWA & アプリアイコン設定 (常に最新を取得) -->
-  <link rel="manifest" href="manifest.json">
+  <link rel="manifest" href="manifest.json?v=3">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#0F172A">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SHT Calendar">
+  <meta name="apple-mobile-web-app-title" content="SFT Calendar">
   
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -41,9 +41,9 @@
         
         <!-- アイコンと右側テキストの高さを揃えたコンテナ -->
         <div class="flex items-center justify-center gap-2">
-          <img src="icon.png" alt="SHT Icon" class="w-9 h-9 rounded-lg shadow-md border border-slate-700/60 object-cover shrink-0">
+          <img src="icon.png" alt="SFT Icon" class="w-9 h-9 rounded-lg shadow-md border border-slate-700/60 object-cover shrink-0">
           <div class="flex flex-col justify-center text-left">
-            <span class="text-[10px] uppercase tracking-widest text-teal-400 font-extrabold block leading-none mb-1">SHT Calendar</span>
+            <span id="headerTitle" class="text-[10px] uppercase tracking-widest text-teal-400 font-extrabold block leading-none mb-1">SFT Calendar</span>
             <h2 id="currentMonthYear" class="text-lg font-bold tracking-tight text-white leading-none">2026年 07月</h2>
           </div>
         </div>
@@ -230,7 +230,7 @@
     const dayMemoInput = document.getElementById('dayMemoInput');
     const forceUpdateBtn = document.getElementById('forceUpdateBtn');
 
-    // ── 最新アップデート（フォーカス状態を100%維持して最新コードに更新） ──
+    // ── 最新アップデート（キャッシュクリア＆強制リロード） ──
     forceUpdateBtn.addEventListener('click', async () => {
       forceUpdateBtn.innerHTML = "<span>🔄</span> <span>更新中...</span>";
       
@@ -252,10 +252,11 @@
       } catch (e) {
         console.error('Update error:', e);
       }
-      window.location.reload(true);
+      // キャッシュ無効化パラメータ付きでリロード
+      window.location.href = window.location.pathname + '?t=' + Date.now();
     });
 
-    // ── ロック状態のUIトグル更新（ボタンテキストで判別） ──
+    // ── ロック状態のUIトグル更新 ──
     function updateLockUI() {
       if (isDateSelectionLocked) {
         toggleLockBtn.textContent = "固定（ロック）";
@@ -467,7 +468,6 @@
       const isSatOrHol = isSat || isHol;
 
       if (!workData[dateString]) {
-        // 平日（日曜および土祝を除く）はデフォルトで勤務対象日
         const isDefaultSelected = !isSun && !isSatOrHol;
         workData[dateString] = { value: "", hours: null, isSelected: isDefaultSelected, memo: "" };
       }
@@ -499,10 +499,8 @@
       cell.addEventListener('click', (e) => {
         selectDateForMemo(dateString);
 
-        // 1. 日曜日はメモ選択のみ（勤務時間なし）
         if (isSun || isAdjacentMonth) return;
 
-        // 2. 土曜・祝日：ロック解除中（isDateSelectionLocked === false）の時だけモーダルを開いて設定可能に！
         if (isSatOrHol) {
           if (!isDateSelectionLocked) {
             openPickerModal(year, month, dateVal, dateString, true);
@@ -510,7 +508,6 @@
           return;
         }
 
-        // 3. 平日：ピッカーボタン以外のセル背景タップ時（変更モード時のみON/OFF切替）
         if (!e.target.closest('.picker-btn')) {
           if (!isDateSelectionLocked) {
             dayData.isSelected = !dayData.isSelected;
@@ -554,8 +551,6 @@
       }
       cell.appendChild(dayHeader);
 
-      // カスタム表示ボタン（勤務時間入力欄）
-      // 平日、または「勤務時間/値が入力されている土祝」に表示！
       const shouldShowPickerBtn = !isAdjacentMonth && !isSun && (!isSatOrHol || dayData.isSelected || dayData.value !== "");
 
       if (shouldShowPickerBtn) {
@@ -583,7 +578,6 @@
         pickerBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           selectDateForMemo(dateString);
-          // ロック解除中（isDateSelectionLocked === false）の時だけ時間設定モーダルを開く
           if (!isDateSelectionLocked) {
             openPickerModal(year, month, dateVal, dateString, isSatOrHol);
           }
@@ -599,7 +593,6 @@
       calendarGridEl.appendChild(cell);
     }
 
-    // ── カレンダー下部の備考メモカードの更新 & フォーカス位置保存 ──
     function selectDateForMemo(dateString) {
       selectedCellDateString = dateString;
       try {
@@ -636,7 +629,6 @@
       saveWorkData();
     });
 
-    // iOS風ボトムシートピッカーモーダルの開閉処理
     function openPickerModal(year, month, dateVal, dateString, isSatOrHol = false) {
       activeDateString = dateString;
       const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
@@ -651,7 +643,6 @@
 
       modalMemoInput.value = dayData.memo || "";
 
-      // 土祝の場合：勤務日にする / 休日にする 切替スイッチを表示！
       if (isSatOrHol) {
         holidayToggleContainer.classList.remove('hidden');
         holidayToggleContainer.classList.add('flex');
@@ -671,12 +662,10 @@
 
     function updateHolidayToggleButtons(isWorkday) {
       if (isWorkday) {
-        // 勤務日選択中
         setWorkdayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-teal-50 text-teal-700 border-teal-500 shadow-xs";
         setHolidayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100";
         optionListContainer.classList.remove('hidden');
       } else {
-        // 休日選択中
         setHolidayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-red-50 text-red-700 border-red-300 shadow-xs";
         setWorkdayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100";
         optionListContainer.classList.add('hidden');
@@ -790,7 +779,7 @@
       }
     });
 
-    closeModalBtn.addEventListener('click', closePickerModal);
+    closeModalBtn.addEventListener('click', closeModalBtn);
 
     function calculateTotal() {
       const year = currentDate.getFullYear();

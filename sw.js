@@ -1,13 +1,13 @@
-const CACHE_NAME = 'sht-calendar-v2';
+const CACHE_NAME = 'sft-calendar-v3';
 const ASSETS = [
   './',
   './index.html',
   './SHTCalendar.html',
-  './icon.png',
-  './manifest.json'
+  './manifest.json',
+  './icon.png'
 ];
 
-// インストール時に新しいService Workerを即時アクティベート
+// インストール処理：キャッシュ登録 & skipWaiting で即時有効化
 self.addEventListener('install', (e) => {
   self.skipWaiting();
   e.waitUntil(
@@ -17,7 +17,7 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// アクティベート時に旧キャッシュを即時削除＆コントロール権を取得
+// アクティベート処理：古いキャッシュの削除 & クライアントへの即時制御適用
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
@@ -32,22 +32,25 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// ネットワークファースト（ネット接続時は常に最新を取得・更新し、オフライン時のみキャッシュを利用）
+// Network-First 戦略：常にネットワークから最新アセットを取得し、失敗時のみキャッシュ
 self.addEventListener('fetch', (e) => {
+  // GETリクエストのみキャッシュ処理
   if (e.request.method !== 'GET') return;
 
   e.respondWith(
     fetch(e.request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
+        // 正常なレスポンスであればキャッシュを最新化
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, responseClone);
+            cache.put(e.request, responseToCache);
           });
         }
         return networkResponse;
       })
       .catch(() => {
+        // オフライン時はキャッシュから返す
         return caches.match(e.request);
       })
   );
