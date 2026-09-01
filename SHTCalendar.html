@@ -171,10 +171,23 @@
         >
       </div>
 
-      <!-- 選択項目リスト (iOS ActionSheet 風) -->
-      <div class="flex flex-col gap-1">
+      <!-- 土曜・祝日用：勤務日/休日切り替えスイッチ（ダイナミック表示） -->
+      <div id="holidayToggleContainer" class="hidden flex-col gap-1 pt-1 border-t border-slate-100">
+        <span class="text-[11px] font-bold text-slate-500">日分の設定</span>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="setHolidayBtn" class="py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1">
+            <span>🌴</span> 休日にする
+          </button>
+          <button id="setWorkdayBtn" class="py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1">
+            <span>💼</span> 勤務日にする
+          </button>
+        </div>
+      </div>
+
+      <!-- 選択項目リスト (iOS ActionSheet 風 プルダウン/時間選択) -->
+      <div id="optionListContainer" class="flex flex-col gap-1">
         <span class="text-[11px] font-bold text-slate-500">勤務時間 / 区分</span>
-        <div id="modalOptionList" class="max-h-[220px] overflow-y-auto flex flex-col gap-1 py-1 pr-1">
+        <div id="modalOptionList" class="max-h-[200px] overflow-y-auto flex flex-col gap-1 py-1 pr-1">
           <!-- JSで動的にボタン項目を出力 -->
         </div>
       </div>
@@ -205,6 +218,10 @@
     const pickerModal = document.getElementById('pickerModal');
     const pickerSheet = document.getElementById('pickerSheet');
     const modalDateTitle = document.getElementById('modalDateTitle');
+    const holidayToggleContainer = document.getElementById('holidayToggleContainer');
+    const setHolidayBtn = document.getElementById('setHolidayBtn');
+    const setWorkdayBtn = document.getElementById('setWorkdayBtn');
+    const optionListContainer = document.getElementById('optionListContainer');
     const modalOptionList = document.getElementById('modalOptionList');
     const modalMemoInput = document.getElementById('modalMemoInput');
     const closeModalBtn = document.getElementById('closeModalBtn');
@@ -241,11 +258,9 @@
     // ── ロック状態のUIトグル更新（ボタンテキストで判別） ──
     function updateLockUI() {
       if (isDateSelectionLocked) {
-        // 固定（ロック）状態：オレンジ色の「固定（ロック）」ボタン
         toggleLockBtn.textContent = "固定（ロック）";
         toggleLockBtn.className = "text-xs font-extrabold px-3.5 py-1.5 rounded-lg border transition-all shadow-xs bg-amber-500 text-white border-amber-600 hover:bg-amber-600 active:bg-amber-700";
       } else {
-        // 変更モード状態：白色の「変更モード」ボタン
         toggleLockBtn.textContent = "変更モード";
         toggleLockBtn.className = "text-xs font-extrabold px-3.5 py-1.5 rounded-lg border transition-all shadow-xs bg-white text-slate-700 border-slate-300 hover:bg-slate-50 active:bg-slate-100";
       }
@@ -449,11 +464,11 @@
       const isSat = dayOfWeek === 6;
       const holidayName = isAdjacentMonth ? undefined : getHolidayName(dateString);
       const isHol = holidayName !== undefined;
-      const isLegalHoliday = isSun || isSat || isHol;
+      const isSatOrHol = isSat || isHol;
 
       if (!workData[dateString]) {
-        const isActualHoliday = isSun || isSat || isHoliday(dateString);
-        const isDefaultSelected = !isActualHoliday;
+        // 平日（日曜および土祝を除く）はデフォルトで勤務対象日
+        const isDefaultSelected = !isSun && !isSatOrHol;
         workData[dateString] = { value: "", hours: null, isSelected: isDefaultSelected, memo: "" };
       }
       const dayData = workData[dateString];
@@ -466,7 +481,9 @@
         cellClass += 'bg-slate-50/60 border-slate-100 text-slate-300';
       } else if (selectedCellDateString === dateString) {
         cellClass += 'bg-sky-100/90 border-2 border-teal-500 text-slate-900 shadow-md ring-2 ring-teal-500/20';
-      } else if (isLegalHoliday) {
+      } else if (isSun) {
+        cellClass += 'bg-red-50/25 border-red-100 text-red-400';
+      } else if (isHol) {
         cellClass += 'bg-red-50/25 border-red-100 text-red-400';
       } else if (dayData.value === 'PAID') {
         cellClass += 'bg-emerald-50 border-emerald-300 text-emerald-900 shadow-sm';
@@ -481,7 +498,20 @@
 
       cell.addEventListener('click', (e) => {
         selectDateForMemo(dateString);
-        if (!isAdjacentMonth && !isLegalHoliday && !e.target.closest('.picker-btn')) {
+
+        // 1. 日曜日はメモ選択のみ（勤務時間なし）
+        if (isSun || isAdjacentMonth) return;
+
+        // 2. 土曜・祝日：ロック解除中（isDateSelectionLocked === false）の時だけモーダルを開いて設定可能に！
+        if (isSatOrHol) {
+          if (!isDateSelectionLocked) {
+            openPickerModal(year, month, dateVal, dateString, true);
+          }
+          return;
+        }
+
+        // 3. 平日：ピッカーボタン以外のセル背景タップ時（変更モード時のみON/OFF切替）
+        if (!e.target.closest('.picker-btn')) {
           if (!isDateSelectionLocked) {
             dayData.isSelected = !dayData.isSelected;
             saveWorkData();
@@ -501,7 +531,7 @@
       dayNum.className = `text-xs font-extrabold ${
         isAdjacentMonth 
           ? 'text-slate-300' 
-          : (isLegalHoliday ? (isSat ? 'text-blue-500' : 'text-red-500') : 'text-slate-800')
+          : (isSun || isHol ? 'text-red-500' : (isSat ? 'text-blue-500' : 'text-slate-800'))
       }`;
       dayNum.textContent = dateVal;
       dayNumContainer.appendChild(dayNum);
@@ -524,8 +554,11 @@
       }
       cell.appendChild(dayHeader);
 
-      // カスタム表示ボタン（ボトムシート起動用）
-      if (!isAdjacentMonth && !isLegalHoliday) {
+      // カスタム表示ボタン（勤務時間入力欄）
+      // 平日、または「勤務時間/値が入力されている土祝」に表示！
+      const shouldShowPickerBtn = !isAdjacentMonth && !isSun && (!isSatOrHol || dayData.isSelected || dayData.value !== "");
+
+      if (shouldShowPickerBtn) {
         const pickerBtn = document.createElement('button');
         pickerBtn.className = 'picker-btn w-full text-[10px] font-extrabold border rounded py-1 transition-all flex items-center justify-center gap-0.5 ';
         
@@ -550,7 +583,10 @@
         pickerBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           selectDateForMemo(dateString);
-          openPickerModal(year, month, dateVal, dateString);
+          // ロック解除中（isDateSelectionLocked === false）の時だけ時間設定モーダルを開く
+          if (!isDateSelectionLocked) {
+            openPickerModal(year, month, dateVal, dateString, isSatOrHol);
+          }
         });
 
         cell.appendChild(pickerBtn);
@@ -586,7 +622,7 @@
       memoSelectedDateTitle.textContent = `${m}月${d}日 (${dayOfWeek}) の備考メモ`;
       
       if (!workData[dateString]) {
-        workData[dateString] = { value: "", hours: null, isSelected: true, memo: "" };
+        workData[dateString] = { value: "", hours: null, isSelected: false, memo: "" };
       }
       dayMemoInput.value = workData[dateString].memo || "";
     }
@@ -594,27 +630,86 @@
     dayMemoInput.addEventListener('input', (e) => {
       if (!selectedCellDateString) return;
       if (!workData[selectedCellDateString]) {
-        workData[selectedCellDateString] = { value: "", hours: null, isSelected: true, memo: "" };
+        workData[selectedCellDateString] = { value: "", hours: null, isSelected: false, memo: "" };
       }
       workData[selectedCellDateString].memo = e.target.value;
       saveWorkData();
     });
 
     // iOS風ボトムシートピッカーモーダルの開閉処理
-    function openPickerModal(year, month, dateVal, dateString) {
+    function openPickerModal(year, month, dateVal, dateString, isSatOrHol = false) {
       activeDateString = dateString;
       const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
       const dayOfWeek = weekDays[new Date(year, month, dateVal).getDay()];
       
       modalDateTitle.textContent = `${month + 1}月${dateVal}日 (${dayOfWeek}) の設定`;
-      modalOptionList.innerHTML = '';
 
       if (!workData[dateString]) {
-        workData[dateString] = { value: "", hours: null, isSelected: true, memo: "" };
+        workData[dateString] = { value: "", hours: null, isSelected: !isSatOrHol, memo: "" };
+      }
+      const dayData = workData[dateString];
+
+      modalMemoInput.value = dayData.memo || "";
+
+      // 土祝の場合：勤務日にする / 休日にする 切替スイッチを表示！
+      if (isSatOrHol) {
+        holidayToggleContainer.classList.remove('hidden');
+        holidayToggleContainer.classList.add('flex');
+
+        updateHolidayToggleButtons(dayData.isSelected || dayData.value !== "");
+      } else {
+        holidayToggleContainer.classList.add('hidden');
+        holidayToggleContainer.classList.remove('flex');
+        optionListContainer.classList.remove('hidden');
       }
 
-      modalMemoInput.value = workData[dateString].memo || "";
+      renderModalOptions(dateString);
 
+      pickerModal.classList.remove('opacity-0', 'pointer-events-none');
+      pickerSheet.classList.remove('translate-y-full');
+    }
+
+    function updateHolidayToggleButtons(isWorkday) {
+      if (isWorkday) {
+        // 勤務日選択中
+        setWorkdayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-teal-50 text-teal-700 border-teal-500 shadow-xs";
+        setHolidayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100";
+        optionListContainer.classList.remove('hidden');
+      } else {
+        // 休日選択中
+        setHolidayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-red-50 text-red-700 border-red-300 shadow-xs";
+        setWorkdayBtn.className = "py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1 bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100";
+        optionListContainer.classList.add('hidden');
+      }
+    }
+
+    setHolidayBtn.addEventListener('click', () => {
+      if (!activeDateString) return;
+      const dayData = workData[activeDateString];
+      dayData.isSelected = false;
+      dayData.value = "";
+      dayData.hours = null;
+      saveWorkData();
+      updateHolidayToggleButtons(false);
+      renderCalendar();
+    });
+
+    setWorkdayBtn.addEventListener('click', () => {
+      if (!activeDateString) return;
+      const dayData = workData[activeDateString];
+      dayData.isSelected = true;
+      if (!dayData.value) {
+        dayData.value = "8.0";
+        dayData.hours = 8.0;
+      }
+      saveWorkData();
+      updateHolidayToggleButtons(true);
+      renderModalOptions(activeDateString);
+      renderCalendar();
+    });
+
+    function renderModalOptions(dateString) {
+      modalOptionList.innerHTML = '';
       const currentVal = workData[dateString]?.value || "";
 
       const options = [
@@ -631,9 +726,9 @@
         const itemBtn = document.createElement('button');
         const isSelected = currentVal === opt.val;
         
-        itemBtn.className = `w-full px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all ${
+        itemBtn.className = `w-full px-4 py-2 rounded-xl text-xs font-bold flex items-center justify-between transition-all ${
           isSelected 
-            ? 'bg-teal-50 text-teal-700 border-2 border-teal-500 shadow-sm' 
+            ? 'bg-teal-50 text-teal-700 border-2 border-teal-500 shadow-xs' 
             : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 active:bg-slate-200'
         }`;
 
@@ -649,15 +744,12 @@
 
         modalOptionList.appendChild(itemBtn);
       });
-
-      pickerModal.classList.remove('opacity-0', 'pointer-events-none');
-      pickerSheet.classList.remove('translate-y-full');
     }
 
     modalMemoInput.addEventListener('input', (e) => {
       if (!activeDateString) return;
       if (!workData[activeDateString]) {
-        workData[activeDateString] = { value: "", hours: null, isSelected: true, memo: "" };
+        workData[activeDateString] = { value: "", hours: null, isSelected: false, memo: "" };
       }
       workData[activeDateString].memo = e.target.value;
       dayMemoInput.value = e.target.value;
@@ -679,10 +771,13 @@
         dayData.hours = null;
       } else if (val === "PAID") {
         dayData.hours = 8.0;
+        dayData.isSelected = true;
       } else if (val === "SFT") {
         dayData.hours = 0.0;
+        dayData.isSelected = true;
       } else {
         dayData.hours = parseFloat(val);
+        dayData.isSelected = true;
       }
 
       saveWorkData();
