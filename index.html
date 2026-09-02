@@ -6,7 +6,7 @@
   <title>SFT Calendar</title>
   
   <!-- PWA & アプリアイコン設定 (常に最新を取得) -->
-  <link rel="manifest" href="manifest.json?v=8">
+  <link rel="manifest" href="manifest.json?v=9">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#0F172A">
@@ -135,9 +135,9 @@
 
     <!-- 右下のツール ＆ ユーザーID設定 ＆ 最新アップデートリンク -->
     <div class="w-full px-3 py-1.5 flex justify-between items-center border-t border-slate-100 mt-1 pt-2">
-      <button id="setUserIdBtn" class="text-[11px] font-bold text-slate-500 hover:text-teal-600 transition-colors flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200">
+      <button id="setUserIdBtn" class="text-[11px] font-bold text-slate-600 hover:text-teal-600 transition-colors flex items-center gap-1 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg border border-slate-200 active:scale-95">
         <span>🔑</span>
-        <span id="userIdLabel">ID未設定</span>
+        <span id="userIdLabel">固有IDを設定</span>
       </button>
 
       <button id="forceUpdateBtn" class="text-[11px] font-bold text-slate-400 hover:text-teal-600 underline underline-offset-2 transition-colors flex items-center gap-1 cursor-pointer active:opacity-70">
@@ -148,14 +148,44 @@
 
   </div>
 
+  <!-- PWA対応：スマホでも確実に動作する固有ID設定モーダル -->
+  <div id="userIdModal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-[340px] shadow-2xl flex flex-col gap-4 transform scale-95 transition-transform duration-200" id="userIdModalContent">
+      <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
+        <span class="text-xl">🔑</span>
+        <div class="flex flex-col">
+          <h3 class="text-sm font-extrabold text-slate-800">クラウド固有IDの設定</h3>
+          <span class="text-[10px] text-slate-400">合言葉を入力するとデータを完全復元</span>
+        </div>
+      </div>
+      
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-bold text-slate-600">あなたの固有ID (合言葉)</label>
+        <input 
+          type="text" 
+          id="userIdInput" 
+          placeholder="例: yukii-secret-123"
+          class="w-full text-xs text-slate-800 bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500/50 focus:border-teal-500"
+        >
+        <p class="text-[10px] text-slate-400 leading-tight">どの端末・ブラウザからでも、同じIDを入力するだけでクラウドから全データが自動同期・復元されます。</p>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+        <button id="cancelUserIdBtn" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100 active:bg-slate-200">
+          キャンセル
+        </button>
+        <button id="saveUserIdBtn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 shadow-xs">
+          同期・決定
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- iOS風ボトムシートピッカーモーダル -->
   <div id="pickerModal" class="modal-overlay fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs opacity-0 pointer-events-none">
-    <!-- モーダルシート本体 -->
     <div id="pickerSheet" class="modal-sheet w-full max-w-[420px] mx-auto bg-white rounded-t-2xl p-4 shadow-2xl transform translate-y-full flex flex-col gap-3">
-      <!-- つまみグラブバー -->
       <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto"></div>
       
-      <!-- ヘッダー -->
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <span id="modalDateTitle" class="text-sm font-extrabold text-slate-800">月 日</span>
         <button id="closeModalBtn" class="text-xs font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg active:bg-teal-100 transition-colors">
@@ -163,7 +193,6 @@
         </button>
       </div>
       
-      <!-- 備考メモ入力（モーダル内） -->
       <div class="flex flex-col gap-1">
         <label class="text-[11px] font-bold text-slate-500 flex items-center gap-1">
           <span>📝</span> 備考メモ
@@ -176,7 +205,6 @@
         >
       </div>
 
-      <!-- 土曜・祝日用：勤務日/休日切り替えスイッチ（ダイナミック表示） -->
       <div id="holidayToggleContainer" class="hidden flex-col gap-1 pt-1 border-t border-slate-100">
         <span class="text-[11px] font-bold text-slate-500">日分の設定</span>
         <div class="grid grid-cols-2 gap-2">
@@ -189,11 +217,9 @@
         </div>
       </div>
 
-      <!-- 選択項目リスト (iOS ActionSheet 風 プルダウン/時間選択) -->
       <div id="optionListContainer" class="flex flex-col gap-1">
         <span class="text-[11px] font-bold text-slate-500">勤務時間 / 区分</span>
         <div id="modalOptionList" class="max-h-[200px] overflow-y-auto flex flex-col gap-1 py-1 pr-1">
-          <!-- JSで動的にボタン項目を出力 -->
         </div>
       </div>
     </div>
@@ -241,6 +267,12 @@
     const userIdLabel = document.getElementById('userIdLabel');
     const syncStatusBadge = document.getElementById('syncStatusBadge');
 
+    const userIdModal = document.getElementById('userIdModal');
+    const userIdModalContent = document.getElementById('userIdModalContent');
+    const userIdInput = document.getElementById('userIdInput');
+    const cancelUserIdBtn = document.getElementById('cancelUserIdBtn');
+    const saveUserIdBtn = document.getElementById('saveUserIdBtn');
+
     function updateUserIdDisplay() {
       if (currentUserId) {
         userIdLabel.textContent = `ID: ${currentUserId}`;
@@ -251,24 +283,43 @@
       }
     }
 
-    setUserIdBtn.addEventListener('click', async () => {
-      const input = prompt("【クラウド自動復元用】\n固有のユーザーID（合言葉）を入力してください:\n（※どの端末・ブラウザでもこのIDを入れるとデータが完全復活します）", currentUserId);
-      if (input !== null) {
-        const trimmed = input.trim();
-        if (trimmed !== "") {
-          currentUserId = trimmed;
-          localStorage.setItem(USER_ID_KEY, currentUserId);
-          updateUserIdDisplay();
+    // ── 固有ID設定モーダルの開閉（スマホPWAプロンプト不具合対策） ──
+    setUserIdBtn.addEventListener('click', () => {
+      userIdInput.value = currentUserId;
+      userIdModal.classList.remove('opacity-0', 'pointer-events-none');
+      userIdModalContent.classList.remove('scale-95');
+      userIdModalContent.classList.add('scale-100');
+    });
 
-          // 1. 手元に既存のデータがあれば速やかにクラウドへアップロード保存！
-          if (Object.keys(workData).length > 0) {
-            await saveWorkDataImmediate();
-          }
+    function closeUserIdModal() {
+      userIdModalContent.classList.remove('scale-100');
+      userIdModalContent.classList.add('scale-95');
+      userIdModal.classList.add('opacity-0', 'pointer-events-none');
+    }
 
-          // 2. クラウドDBからデータを復元・同期
-          await loadWorkData();
-          alert(`ユーザーID「${currentUserId}」とクラウド同期が完了しました！`);
+    cancelUserIdBtn.addEventListener('click', closeUserIdModal);
+
+    saveUserIdBtn.addEventListener('click', async () => {
+      const trimmed = userIdInput.value.trim();
+      if (trimmed !== "") {
+        currentUserId = trimmed;
+        localStorage.setItem(USER_ID_KEY, currentUserId);
+        updateUserIdDisplay();
+        closeUserIdModal();
+
+        // 1. 手元にデータがあればクラウドへ速やかに保存！
+        if (Object.keys(workData).length > 0) {
+          await saveWorkDataImmediate();
         }
+
+        // 2. クラウドDBからデータを復元・同期
+        await loadWorkData();
+      }
+    });
+
+    userIdModal.addEventListener('click', (e) => {
+      if (e.target === userIdModal) {
+        closeUserIdModal();
       }
     });
 
@@ -298,8 +349,8 @@
               Object.assign(workData, result.data);
               localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
               renderCalendar();
+              if (syncStatusBadge) syncStatusBadge.textContent = "🟢 クラウド完全復元完了";
             } else if (Object.keys(workData).length > 0) {
-              // クラウド側にまだデータが無く、手元にデータがある場合は即時初期アップロード！
               await saveWorkDataImmediate();
             }
           }
@@ -326,10 +377,8 @@
     let saveTimer = null;
     function saveWorkData() {
       try {
-        // A. LocalStorage へ保存
         localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
 
-        // B. クラウド DB (Vercel API) へ非同期全自動保存
         if (!currentUserId) {
           if (syncStatusBadge) syncStatusBadge.textContent = "💾 ローカル保存完了 (ID未設定)";
           return;
