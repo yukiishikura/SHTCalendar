@@ -1,5 +1,6 @@
-const CACHE_NAME = 'sft-calendar-v3';
-const ASSETS = [
+// PWA Service Worker (即時パージ対応)
+const CACHE_NAME = 'sft-calendar-v10';
+const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './SHTCalendar.html',
@@ -7,51 +8,44 @@ const ASSETS = [
   './icon.png'
 ];
 
-// インストール処理：キャッシュ登録 & skipWaiting で即時有効化
-self.addEventListener('install', (e) => {
+self.addEventListener('install', (event) => {
   self.skipWaiting();
-  e.waitUntil(
+  event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      return cache.addAll(ASSETS_TO_CACHE);
     })
   );
 });
 
-// アクティベート処理：古いキャッシュの削除 & クライアントへの即時制御適用
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then((keys) => {
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
+        cacheNames.map((cache) => {
+          return caches.delete(cache);
         })
       );
     }).then(() => self.clients.claim())
   );
 });
 
-// Network-First 戦略：常にネットワークから最新アセットを取得し、失敗時のみキャッシュ
-self.addEventListener('fetch', (e) => {
-  // GETリクエストのみキャッシュ処理
-  if (e.request.method !== 'GET') return;
-
-  e.respondWith(
-    fetch(e.request)
-      .then((networkResponse) => {
-        // 正常なレスポンスであればキャッシュを最新化
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
+self.addEventListener('fetch', (event) => {
+  // APIリクエストおよびHTMLページはネットワークファーストで常に最新取得
+  if (event.request.url.includes('/api/') || event.request.mode === 'navigate') {
+    return;
+  }
+  
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        if (response.status === 200) {
+          const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
-            cache.put(e.request, responseToCache);
+            cache.put(event.request, responseClone);
           });
         }
-        return networkResponse;
+        return response;
       })
-      .catch(() => {
-        // オフライン時はキャッシュから返す
-        return caches.match(e.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });

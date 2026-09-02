@@ -6,7 +6,7 @@
   <title>SFT Calendar</title>
   
   <!-- PWA & アプリアイコン設定 (常に最新を取得) -->
-  <link rel="manifest" href="manifest.json?v=12">
+  <link rel="manifest" href="manifest.json?v=20">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#0F172A">
@@ -53,32 +53,50 @@
         </button>
       </div>
       
-      <!-- 時間集計ダッシュボード (3列均等表示) -->
-      <div class="grid grid-cols-3 gap-1.5">
-        <!-- 1. 最低労働時間 -->
-        <div class="bg-slate-800/90 border border-slate-700/80 p-2 rounded-xl flex flex-col items-center justify-center text-center">
-          <span class="text-[9px] font-bold text-slate-400 block leading-tight mb-0.5">最低労働時間</span>
+      <!-- 時間・日数集計ダッシュボード (5列均等表示) -->
+      <div class="grid grid-cols-5 gap-1">
+        <!-- 1. 所定労働日数 (別カラー: パープル) -->
+        <div class="bg-purple-950/70 border border-purple-800/60 p-1.5 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[8px] font-extrabold text-purple-300 block leading-tight mb-0.5 whitespace-nowrap">所定労働日数</span>
           <div class="flex items-baseline gap-0.5">
-            <span id="targetHours" class="text-lg font-extrabold text-sky-400 leading-none">0</span>
-            <span class="text-[10px] text-slate-400 font-medium">h</span>
+            <span id="targetDays" class="text-base font-extrabold text-purple-300 leading-none">0</span>
+            <span class="text-[9px] text-purple-400 font-medium">日</span>
           </div>
         </div>
 
-        <!-- 2. 労働時間 -->
-        <div class="bg-slate-800/90 border border-slate-700/80 p-2 rounded-xl flex flex-col items-center justify-center text-center">
-          <span class="text-[9px] font-bold text-slate-400 block leading-tight mb-0.5">労働時間</span>
+        <!-- 2. 日数差分 (別カラー: インディゴ) -->
+        <div class="bg-purple-950/70 border border-purple-800/60 p-1.5 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[8px] font-extrabold text-indigo-300 block leading-tight mb-0.5 whitespace-nowrap">日数差分</span>
           <div class="flex items-baseline gap-0.5">
-            <span id="totalHours" class="text-lg font-extrabold text-teal-400 leading-none">0</span>
-            <span class="text-[10px] text-slate-400 font-medium">h</span>
+            <span id="diffDays" class="text-base font-extrabold text-indigo-300 leading-none">0</span>
+            <span class="text-[9px] text-indigo-400 font-medium">日</span>
           </div>
         </div>
 
-        <!-- 3. 差分 -->
-        <div class="bg-slate-800/90 border border-slate-700/80 p-2 rounded-xl flex flex-col items-center justify-center text-center">
-          <span class="text-[9px] font-bold text-slate-400 block leading-tight mb-0.5">差分</span>
+        <!-- 3. 最低労働時間 -->
+        <div class="bg-slate-800/90 border border-slate-700/80 p-1.5 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[8px] font-extrabold text-slate-400 block leading-tight mb-0.5 whitespace-nowrap">最低労働時間</span>
           <div class="flex items-baseline gap-0.5">
-            <span id="diffHours" class="text-lg font-extrabold text-slate-300 leading-none">±0</span>
-            <span class="text-[10px] text-slate-400 font-medium">h</span>
+            <span id="targetHours" class="text-base font-extrabold text-sky-400 leading-none">0</span>
+            <span class="text-[9px] text-slate-400 font-medium">h</span>
+          </div>
+        </div>
+
+        <!-- 4. 実労働時間 -->
+        <div class="bg-slate-800/90 border border-slate-700/80 p-1.5 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[8px] font-extrabold text-slate-400 block leading-tight mb-0.5 whitespace-nowrap">実労働時間</span>
+          <div class="flex items-baseline gap-0.5">
+            <span id="totalHours" class="text-base font-extrabold text-teal-400 leading-none">0</span>
+            <span class="text-[9px] text-slate-400 font-medium">h</span>
+          </div>
+        </div>
+
+        <!-- 5. 時間差分 -->
+        <div class="bg-slate-800/90 border border-slate-700/80 p-1.5 rounded-xl flex flex-col items-center justify-center text-center">
+          <span class="text-[8px] font-extrabold text-slate-400 block leading-tight mb-0.5 whitespace-nowrap">時間差分</span>
+          <div class="flex items-baseline gap-0.5">
+            <span id="diffHours" class="text-base font-extrabold text-slate-300 leading-none">±0</span>
+            <span class="text-[9px] text-slate-400 font-medium">h</span>
           </div>
         </div>
       </div>
@@ -188,7 +206,7 @@
       
       <div class="flex items-center justify-between pb-2 border-b border-slate-100">
         <span id="modalDateTitle" class="text-sm font-extrabold text-slate-800">月 日</span>
-        <button id="closeModalBtn" class="text-xs font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg active:bg-teal-100 transition-colors">
+        <button id="closeModalBtn" onclick="closePickerModal()" class="text-xs font-bold text-teal-600 hover:text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg active:bg-teal-100 transition-colors">
           完了
         </button>
       </div>
@@ -241,9 +259,13 @@
 
     const currentMonthYearEl = document.getElementById('currentMonthYear');
     const calendarGridEl = document.getElementById('calendarGrid');
+
+    const targetDaysEl = document.getElementById('targetDays');
+    const diffDaysEl = document.getElementById('diffDays');
     const targetHoursEl = document.getElementById('targetHours');
     const totalHoursEl = document.getElementById('totalHours');
     const diffHoursEl = document.getElementById('diffHours');
+
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
 
@@ -624,7 +646,6 @@
           memo: "" 
         };
       } else {
-        // すでにデータが存在し、かつ平日の初期未選択状態（value === "" で手動時間入力なし）の場合のみ初期値 8.0h を補完
         const dayData = workData[dateString];
         if (isWeekday && dayData.isSelected && dayData.value === "" && dayData.hours === null) {
           dayData.value = "8.0";
@@ -905,11 +926,13 @@
       saveWorkData();
     });
 
-    function closePickerModal() {
-      pickerSheet.classList.add('translate-y-full');
-      pickerModal.classList.add('opacity-0', 'pointer-events-none');
+    window.closePickerModal = function() {
+      const modalEl = document.getElementById('pickerModal');
+      const sheetEl = document.getElementById('pickerSheet');
+      if (sheetEl) sheetEl.classList.add('translate-y-full');
+      if (modalEl) modalEl.classList.add('opacity-0', 'pointer-events-none');
       renderCalendar();
-    }
+    };
 
     function updateDayValue(dateString, val) {
       if (!workData[dateString]) return;
@@ -939,15 +962,16 @@
       }
     });
 
-    closeModalBtn.addEventListener('click', closeModalBtn);
+    closeModalBtn.addEventListener('click', closePickerModal);
 
-    // ── 最低労働時間・労働時間・差分の正規定義計算 ──
+    // ── ダッシュボード5項目（日数・時間）の計算ロジック ──
     function calculateTotal() {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       
-      let totalPlanned = 0;
-      let standardWorkDaysCount = 0; // 平日（祝日でない月〜金）の勤務対象日数のみ
+      let totalPlannedHours = 0;
+      let totalStandardWeekdayCount = 0; // その月の祝日でない平日の総数 (所定労働日数)
+      let actualWorkDaysWithHoursCount = 0; // 出勤日数（※SFTは出勤扱いにならない）
 
       for (const [key, value] of Object.entries(workData)) {
         const [kYear, kMonth, kDay] = key.split('-').map(Number);
@@ -959,36 +983,59 @@
           const isHol = isHoliday(key);
           const isWeekday = !isSun && !isSat && !isHol;
 
-          // 1. 労働時間（平日・土祝問わず入力された時間を集計）
-          if (value.hours !== null) {
-            totalPlanned += value.hours;
+          // 1. 所定労働日数（平日の数）
+          if (isWeekday) {
+            totalStandardWeekdayCount++;
           }
 
-          // 2. 最低労働時間（土祝を除く平日で勤務対象となっている日数×8時間）
-          if (isWeekday && value.isSelected) {
-            standardWorkDaysCount++;
+          // 2. 実質出勤日数のカウント（有給 または 時間入力があり >0.0h の場合。SFTや未設定は出勤にならない）
+          const isActualWorkDay = (value.value === 'PAID') || (value.hours !== null && value.hours > 0);
+          if (isActualWorkDay) {
+            actualWorkDaysWithHoursCount++;
+          }
+
+          if (value.hours !== null) {
+            totalPlannedHours += value.hours;
           }
         }
       }
 
-      const targetTotal = standardWorkDaysCount * 8;
-      const diff = totalPlanned - targetTotal;
-      let diffText = "";
-      
-      if (diff > 0) {
-        diffText = `+${diff}`;
-        diffHoursEl.className = "text-lg font-extrabold leading-none text-emerald-400";
-      } else if (diff < 0) {
-        diffText = `${diff}`;
-        diffHoursEl.className = "text-lg font-extrabold leading-none text-red-400";
+      // 日数差分（実質出勤日数 - 所定労働日数）
+      const diffDaysVal = actualWorkDaysWithHoursCount - totalStandardWeekdayCount;
+      let diffDaysText = "";
+      if (diffDaysVal > 0) {
+        diffDaysText = `+${diffDaysVal}`;
+        diffDaysEl.className = "text-base font-extrabold leading-none text-emerald-300";
+      } else if (diffDaysVal < 0) {
+        diffDaysText = `${diffDaysVal}`;
+        diffDaysEl.className = "text-base font-extrabold leading-none text-red-300";
       } else {
-        diffText = "±0";
-        diffHoursEl.className = "text-lg font-extrabold leading-none text-slate-300";
+        diffDaysText = "0";
+        diffDaysEl.className = "text-base font-extrabold leading-none text-indigo-300";
       }
 
-      targetHoursEl.textContent = targetTotal;
-      totalHoursEl.textContent = totalPlanned;
-      diffHoursEl.textContent = diffText;
+      // 最低労働時間（所定労働日数 × 8h）
+      const targetTotalHours = totalStandardWeekdayCount * 8;
+
+      // 時間差分（実労働時間 - 最低労働時間）
+      const diffHoursVal = totalPlannedHours - targetTotalHours;
+      let diffHoursText = "";
+      if (diffHoursVal > 0) {
+        diffHoursText = `+${diffHoursVal}`;
+        diffHoursEl.className = "text-base font-extrabold leading-none text-emerald-400";
+      } else if (diffHoursVal < 0) {
+        diffHoursText = `${diffHoursVal}`;
+        diffHoursEl.className = "text-base font-extrabold leading-none text-red-400";
+      } else {
+        diffHoursText = "±0";
+        diffHoursEl.className = "text-base font-extrabold leading-none text-slate-300";
+      }
+
+      targetDaysEl.textContent = totalStandardWeekdayCount;
+      diffDaysEl.textContent = diffDaysText;
+      targetHoursEl.textContent = targetTotalHours;
+      totalHoursEl.textContent = totalPlannedHours;
+      diffHoursEl.textContent = diffHoursText;
     }
 
     prevBtn.addEventListener('click', () => {
