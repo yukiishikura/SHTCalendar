@@ -6,7 +6,7 @@
   <title>SFT Calendar</title>
   
   <!-- PWA & アプリアイコン設定 (常に最新を取得) -->
-  <link rel="manifest" href="manifest.json?v=10">
+  <link rel="manifest" href="manifest.json?v=12">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#0F172A">
@@ -309,13 +309,11 @@
 
         if (syncStatusBadge) syncStatusBadge.textContent = "⏳ クラウドから読み込み中...";
 
-        // 1. 【最優先】クラウドDBに既存データがあるかチェックして即時全上書き復元！
         const loadedSuccess = await fetchAndRestoreFromCloud(currentUserId);
         
         if (loadedSuccess) {
           alert(`固有ID「${currentUserId}」のデータをクラウドから完全復元・同期しました！`);
         } else {
-          // 2. クラウドにデータが無かった場合のみ、現在の手元データをクラウドに初期保存
           await saveWorkDataImmediate();
           alert(`固有ID「${currentUserId}」で手元データをクラウドに新規登録・同期しました！`);
         }
@@ -335,7 +333,6 @@
         if (res.ok) {
           const result = await res.json();
           if (result.data && typeof result.data === 'object' && Object.keys(result.data).length > 0) {
-            // クラウドデータを手元に展開
             Object.assign(workData, result.data);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
             renderCalendar();
@@ -352,7 +349,6 @@
     // ── 1. クラウド(Vercel Serverless API) ＆ LocalStorage への完全全自動保存＆復元 ──
     async function loadWorkData() {
       try {
-        // A. LocalStorage から復元
         const savedStr = localStorage.getItem(STORAGE_KEY);
         if (savedStr) {
           const parsed = JSON.parse(savedStr);
@@ -366,7 +362,6 @@
           currentDate = new Date(fYear, fMonth - 1, 1);
         }
 
-        // B. クラウド (Vercel Serverless API) から固有IDのデータを最優先読み込み
         if (currentUserId) {
           await fetchAndRestoreFromCloud(currentUserId);
         }
@@ -618,10 +613,23 @@
       const holidayName = isAdjacentMonth ? undefined : getHolidayName(dateString);
       const isHol = holidayName !== undefined;
       const isSatOrHol = isSat || isHol;
+      const isWeekday = !isSun && !isSatOrHol;
 
+      // 初回またはデータ未設定日の初期生成ロジック（※すでに手動入力がある場合は絶対に保護）
       if (!workData[dateString]) {
-        const isDefaultSelected = !isSun && !isSatOrHol;
-        workData[dateString] = { value: "", hours: null, isSelected: isDefaultSelected, memo: "" };
+        workData[dateString] = { 
+          value: isWeekday ? "8.0" : "", 
+          hours: isWeekday ? 8.0 : null, 
+          isSelected: isWeekday, 
+          memo: "" 
+        };
+      } else {
+        // すでにデータが存在し、かつ平日の初期未選択状態（value === "" で手動時間入力なし）の場合のみ初期値 8.0h を補完
+        const dayData = workData[dateString];
+        if (isWeekday && dayData.isSelected && dayData.value === "" && dayData.hours === null) {
+          dayData.value = "8.0";
+          dayData.hours = 8.0;
+        }
       }
       const dayData = workData[dateString];
 
@@ -933,26 +941,37 @@
 
     closeModalBtn.addEventListener('click', closeModalBtn);
 
+    // ── 最低労働時間・労働時間・差分の正規定義計算 ──
     function calculateTotal() {
       const year = currentDate.getFullYear();
       const month = currentDate.getMonth();
       
       let totalPlanned = 0;
-      let selectedDaysCount = 0;
+      let standardWorkDaysCount = 0; // 平日（祝日でない月〜金）の勤務対象日数のみ
 
       for (const [key, value] of Object.entries(workData)) {
-        const [kYear, kMonth] = key.split('-').map(Number);
+        const [kYear, kMonth, kDay] = key.split('-').map(Number);
         if (kYear === year && kMonth === (month + 1)) {
+          const dt = new Date(kYear, kMonth - 1, kDay);
+          const dayOfWeek = dt.getDay();
+          const isSun = dayOfWeek === 0;
+          const isSat = dayOfWeek === 6;
+          const isHol = isHoliday(key);
+          const isWeekday = !isSun && !isSat && !isHol;
+
+          // 1. 労働時間（平日・土祝問わず入力された時間を集計）
           if (value.hours !== null) {
             totalPlanned += value.hours;
           }
-          if (value.isSelected) {
-            selectedDaysCount++;
+
+          // 2. 最低労働時間（土祝を除く平日で勤務対象となっている日数×8時間）
+          if (isWeekday && value.isSelected) {
+            standardWorkDaysCount++;
           }
         }
       }
 
-      const targetTotal = selectedDaysCount * 8;
+      const targetTotal = standardWorkDaysCount * 8;
       const diff = totalPlanned - targetTotal;
       let diffText = "";
       
