@@ -6,7 +6,7 @@
   <title>SFT Calendar</title>
   
   <!-- PWA & アプリアイコン設定 (常に最新を取得) -->
-  <link rel="manifest" href="manifest.json?v=9">
+  <link rel="manifest" href="manifest.json?v=10">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#0F172A">
@@ -148,7 +148,7 @@
 
   </div>
 
-  <!-- PWA対応：スマホでも確実に動作する固有ID設定モーダル -->
+  <!-- PWA対応：固有ID設定モーダル -->
   <div id="userIdModal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs opacity-0 pointer-events-none transition-opacity duration-200">
     <div class="bg-white rounded-2xl p-5 w-full max-w-[340px] shadow-2xl flex flex-col gap-4 transform scale-95 transition-transform duration-200" id="userIdModalContent">
       <div class="flex items-center gap-2 border-b border-slate-100 pb-2">
@@ -283,7 +283,6 @@
       }
     }
 
-    // ── 固有ID設定モーダルの開閉（スマホPWAプロンプト不具合対策） ──
     setUserIdBtn.addEventListener('click', () => {
       userIdInput.value = currentUserId;
       userIdModal.classList.remove('opacity-0', 'pointer-events-none');
@@ -299,6 +298,7 @@
 
     cancelUserIdBtn.addEventListener('click', closeUserIdModal);
 
+    // ── クラウド優先復元ロジック（ID設定時にクラウドから最優先ロード） ──
     saveUserIdBtn.addEventListener('click', async () => {
       const trimmed = userIdInput.value.trim();
       if (trimmed !== "") {
@@ -307,13 +307,18 @@
         updateUserIdDisplay();
         closeUserIdModal();
 
-        // 1. 手元にデータがあればクラウドへ速やかに保存！
-        if (Object.keys(workData).length > 0) {
-          await saveWorkDataImmediate();
-        }
+        if (syncStatusBadge) syncStatusBadge.textContent = "⏳ クラウドから読み込み中...";
 
-        // 2. クラウドDBからデータを復元・同期
-        await loadWorkData();
+        // 1. 【最優先】クラウドDBに既存データがあるかチェックして即時全上書き復元！
+        const loadedSuccess = await fetchAndRestoreFromCloud(currentUserId);
+        
+        if (loadedSuccess) {
+          alert(`固有ID「${currentUserId}」のデータをクラウドから完全復元・同期しました！`);
+        } else {
+          // 2. クラウドにデータが無かった場合のみ、現在の手元データをクラウドに初期保存
+          await saveWorkDataImmediate();
+          alert(`固有ID「${currentUserId}」で手元データをクラウドに新規登録・同期しました！`);
+        }
       }
     });
 
@@ -322,6 +327,27 @@
         closeUserIdModal();
       }
     });
+
+    async function fetchAndRestoreFromCloud(userId) {
+      if (!userId) return false;
+      try {
+        const res = await fetch(`/api/db?userId=${encodeURIComponent(userId)}`);
+        if (res.ok) {
+          const result = await res.json();
+          if (result.data && typeof result.data === 'object' && Object.keys(result.data).length > 0) {
+            // クラウドデータを手元に展開
+            Object.assign(workData, result.data);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
+            renderCalendar();
+            if (syncStatusBadge) syncStatusBadge.textContent = "🟢 クラウド完全復元完了";
+            return true;
+          }
+        }
+      } catch (e) {
+        console.error('Cloud load error:', e);
+      }
+      return false;
+    }
 
     // ── 1. クラウド(Vercel Serverless API) ＆ LocalStorage への完全全自動保存＆復元 ──
     async function loadWorkData() {
@@ -340,20 +366,9 @@
           currentDate = new Date(fYear, fMonth - 1, 1);
         }
 
-        // B. クラウド (Vercel Serverless API) から固有IDのデータを自動読み込み
+        // B. クラウド (Vercel Serverless API) から固有IDのデータを最優先読み込み
         if (currentUserId) {
-          const res = await fetch(`/api/db?userId=${encodeURIComponent(currentUserId)}`);
-          if (res.ok) {
-            const result = await res.json();
-            if (result.data && typeof result.data === 'object' && Object.keys(result.data).length > 0) {
-              Object.assign(workData, result.data);
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
-              renderCalendar();
-              if (syncStatusBadge) syncStatusBadge.textContent = "🟢 クラウド完全復元完了";
-            } else if (Object.keys(workData).length > 0) {
-              await saveWorkDataImmediate();
-            }
-          }
+          await fetchAndRestoreFromCloud(currentUserId);
         }
       } catch (e) {
         console.error('Failed to load saved data:', e);
