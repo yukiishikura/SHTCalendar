@@ -6,7 +6,7 @@
   <title>SFT Calendar</title>
   
   <!-- PWA & アプリアイコン設定 (常に最新を取得) -->
-  <link rel="manifest" href="manifest.json?v=6">
+  <link rel="manifest" href="manifest.json?v=7">
   <link rel="icon" type="image/png" href="icon.png">
   <link rel="apple-touch-icon" href="icon.png">
   <meta name="theme-color" content="#0F172A">
@@ -264,7 +264,7 @@
       }
     });
 
-    // ── 1. クラウド(Vercel/PHP API) ＆ LocalStorage への完全全自動保存＆復元 ──
+    // ── 1. クラウド(Vercel Serverless API) ＆ LocalStorage への完全全自動保存＆復元 ──
     async function loadWorkData() {
       try {
         // A. LocalStorage から復元
@@ -281,20 +281,16 @@
           currentDate = new Date(fYear, fMonth - 1, 1);
         }
 
-        // B. クラウド (Vercel Serverless API / PHP API) から固有IDのデータを自動読み込み
-        let apiUrl = './api/db.php';
+        // B. クラウド (Vercel Serverless API) から固有IDのデータを自動読み込み
         if (currentUserId) {
-          apiUrl = `/api/db?userId=${encodeURIComponent(currentUserId)}`;
-        }
-
-        const res = await fetch(apiUrl);
-        if (res.ok) {
-          const result = await res.json();
-          const cloudData = result.data || result;
-          if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
-            Object.assign(workData, cloudData);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
-            renderCalendar();
+          const res = await fetch(`/api/db?userId=${encodeURIComponent(currentUserId)}`);
+          if (res.ok) {
+            const result = await res.json();
+            if (result.data && typeof result.data === 'object' && Object.keys(result.data).length > 0) {
+              Object.assign(workData, result.data);
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
+              renderCalendar();
+            }
           }
         }
       } catch (e) {
@@ -308,24 +304,21 @@
         // A. LocalStorage へ保存
         localStorage.setItem(STORAGE_KEY, JSON.stringify(workData));
 
-        // B. クラウド DB (Vercel API / PHP API) へ非同期全自動保存
+        // B. クラウド DB (Vercel API) へ非同期全自動保存
+        if (!currentUserId) {
+          if (syncStatusBadge) syncStatusBadge.textContent = "💾 ローカル保存完了 (ID未設定)";
+          return;
+        }
+
         if (syncStatusBadge) syncStatusBadge.textContent = "⏳ クラウド保存中...";
         if (saveTimer) clearTimeout(saveTimer);
         
         saveTimer = setTimeout(async () => {
           try {
-            let apiUrl = './api/db.php';
-            let payload = JSON.stringify(workData);
-
-            if (currentUserId) {
-              apiUrl = '/api/db';
-              payload = JSON.stringify({ userId: currentUserId, workData: workData });
-            }
-
-            await fetch(apiUrl, {
+            await fetch('/api/db', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: payload
+              body: JSON.stringify({ userId: currentUserId, workData: workData })
             });
             updateUserIdDisplay();
           } catch (err) {
