@@ -16,23 +16,23 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Upstash Redis 環境変数 (VercelのEnvironment Variablesに設定)
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Upstash Redis 環境変数 (Vercel KV / Upstash 接続情報)
+  const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!redisUrl || !redisToken) {
+    console.error('Missing KV/Upstash environment variables');
+    return res.status(200).json({ 
+      warning: 'Upstash Redis env variables not set', 
+      data: null 
+    });
+  }
 
   // GET リクエスト：ユーザーIDに基づくデータ取得
   if (req.method === 'GET') {
     const userId = req.query.userId;
     if (!userId) {
       return res.status(400).json({ error: 'Missing userId parameter' });
-    }
-
-    if (!redisUrl || !redisToken) {
-      // DB未設定時のフォールバック通知
-      return res.status(200).json({ 
-        warning: 'Upstash Redis env variables not set', 
-        data: null 
-      });
     }
 
     try {
@@ -43,8 +43,13 @@ export default async function handler(req, res) {
       });
       const result = await response.json();
       
-      if (result.result) {
-        const parsed = JSON.parse(result.result);
+      if (result && result.result) {
+        let parsed = result.result;
+        if (typeof parsed === 'string') {
+          try {
+            parsed = JSON.parse(parsed);
+          } catch(e) {}
+        }
         return res.status(200).json({ status: 'success', data: parsed });
       } else {
         return res.status(200).json({ status: 'success', data: null });
@@ -62,13 +67,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing userId or workData in body' });
     }
 
-    if (!redisUrl || !redisToken) {
-      return res.status(200).json({ 
-        warning: 'Upstash Redis env variables not set', 
-        message: 'Saved to local only' 
-      });
-    }
-
     try {
       const jsonStr = JSON.stringify(workData);
       const response = await fetch(`${redisUrl}/set/${encodeURIComponent('sft_user_' + userId)}`, {
@@ -80,7 +78,7 @@ export default async function handler(req, res) {
       });
       const result = await response.json();
 
-      return res.status(200).json({ status: 'success', message: 'Data saved to cloud DB successfully' });
+      return res.status(200).json({ status: 'success', message: 'Data saved to cloud DB successfully', result });
     } catch (err) {
       console.error('Redis SET Error:', err);
       return res.status(500).json({ error: 'Failed to save to DB' });
